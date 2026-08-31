@@ -1,55 +1,112 @@
-# AI Resume Analyser
+# 📄 AI Resume Analyser
 
-Upload a resume (PDF/DOCX) + paste a job description → get an ATS match score,
-missing keywords/skills, and either quick suggestions or a fully regenerated,
-downloadable resume.
+AI-powered ATS (Applicant Tracking System) resume analyser and optimizer. Upload a resume, paste a job description, and get a realistic match score, a breakdown of matched vs. missing keywords, and an AI-rewritten version of the resume — without ever inventing skills or experience the candidate doesn't actually have.
 
-## Project Structure
+Built with **Streamlit**, **LangChain**, **Groq**, and **sentence-transformers**.
+
+---
+
+## ✨ Features
+
+- **ATS Match Scoring** — a blended score combining an LLM's holistic judgment with embedding-based semantic keyword matching (not just exact string matching, so "K8s" correctly matches "Kubernetes").
+- **Keyword Breakdown** — clear matched vs. missing keyword lists, missing skills, weak sections, and resume strengths.
+- **Anti-Fabrication Resume Rewriting** — regenerates the resume to use the job description's exact terminology wherever the candidate's real experience already supports it (honest wording improvements), but **never invents** a skill, project, employer, or metric that isn't genuinely there.
+- **Human-in-the-loop notes** — an optional field where the candidate can add real skills/projects the AI should incorporate, keeping every rewrite grounded in truth.
+- **Template-preserving DOCX export** — edits the original uploaded `.docx` in place, keeping its exact fonts, colors, and layout.
+- **Styled PDF export** — renders a clean, ATS-friendly PDF layout (header, section headings, bullets) when the original upload was a PDF.
+- **In-session scan history** — quickly compare scores across multiple job descriptions.
+
+## 🧠 How It Works
+
+1. **Extract** — resume text is pulled from the uploaded PDF/DOCX.
+2. **Analyze** — the resume and job description are compared two ways: an LLM (via Groq) gives a holistic ATS judgment, while a local embedding model (`sentence-transformers`) does semantic keyword matching between the two texts.
+3. **Report** — the two scores are blended into a final score, alongside matched/missing keywords, missing skills, and specific weak sections.
+4. **Optimize** — if requested, the resume is rewritten to align wording with the job description's exact phrasing for skills that genuinely exist — gaps that aren't genuinely present are only ever *suggested*, never fabricated.
+5. **Export** — download the optimized resume as a PDF or DOCX.
+
+## 🛠 Tech Stack
+
+| Layer | Tool |
+|---|---|
+| UI | [Streamlit](https://streamlit.io) |
+| LLM orchestration | [LangChain](https://www.langchain.com/) + [Groq](https://groq.com/) |
+| Semantic matching | [sentence-transformers](https://www.sbert.net/) (`all-MiniLM-L6-v2`) |
+| PDF export | [fpdf2](https://pyfpdf.github.io/fpdf2/) |
+| DOCX handling | [python-docx](https://python-docx.readthedocs.io/) |
+| Structured LLM output | [Pydantic](https://docs.pydantic.dev/) |
+
+## 📁 Project Structure
 
 ```
 ai_resume_analyser/
-├── app.py            # Streamlit UI (entry point)
-├── config.py         # Env vars + model/scoring config
-├── parser.py         # PDF/DOCX text extraction
-├── analyzer.py        # LangChain + Groq analysis chain, scoring
-├── generator.py       # Suggestions + full resume regeneration chains
-├── exporter.py         # Convert regenerated resume text -> DOCX/PDF
-├── styles.py          # Custom CSS for the UI
+├── app.py            # Streamlit UI and orchestration
+├── analyzer.py        # LLM analysis chain + semantic keyword matching
+├── generator.py       # Resume rewriting chains (full-text and paragraph-level)
+├── exporter.py         # PDF/DOCX export and formatting
+├── parser.py           # Resume text/paragraph extraction from PDF/DOCX
+├── styles.py            # Custom CSS and UI component renderers
+├── config.py             # Environment/config loading (local .env or Streamlit secrets)
 ├── requirements.txt
-└── .env.example
+└── .streamlit/
+    └── config.toml
 ```
 
-## Setup
+## 🚀 Getting Started
 
-1. Create a virtual environment and activate it.
-2. Install dependencies:
+### Prerequisites
+- Python 3.10+
+- A free [Groq API key](https://console.groq.com/keys)
+
+### Installation
+
+```bash
+git clone https://github.com/<your-username>/ai-resume-analyser.git
+cd ai-resume-analyser
+python -m venv venv
+venv\Scripts\activate      # Windows
+# source venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+```
+
+### Configuration
+
+Create a `.env` file in the project root:
+
+```
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+### Run
+
+```bash
+streamlit run app.py
+```
+
+The app opens at `http://localhost:8501`.
+
+## ☁️ Deployment
+
+This app is deployed on [Streamlit Community Cloud](https://share.streamlit.io). To deploy your own copy:
+
+1. Push this repository to GitHub.
+2. On Streamlit Community Cloud, create a new app pointing at `app.py`.
+3. Under **Advanced settings → Secrets**, add:
    ```
-   pip install -r requirements.txt
-   ```
-3. Copy `.env.example` to `.env` and add your Groq API key:
-   ```
-   GROQ_API_KEY=your_key_here
-   ```
-4. Run the app:
-   ```
-   streamlit run app.py
+   GROQ_API_KEY = "your_groq_api_key_here"
    ```
 
-## How it works
+**Live demo:** _[add your deployed URL here]_
 
-1. `parser.py` extracts raw text from the uploaded resume.
-2. `analyzer.py` sends the resume text + job description to Groq via LangChain,
-   gets back a structured score, missing keywords/skills, weak sections, and
-   strengths. This is blended with a simple keyword-overlap metric for a more
-   grounded final score.
-3. If the score is below the threshold (default 90), the user can choose:
-   - **Suggestions only** - a bullet list of specific edits to make.
-   - **Full regenerate** - `generator.py` rewrites the resume, and
-     `exporter.py` converts it into a downloadable DOCX or PDF.
+## 🗺 Roadmap
 
-## Next steps / TODO
+- [ ] Persistent analysis history (SQLite)
+- [ ] In-app chat assistant for manual resume tweaks
+- [ ] Multi-resume comparison
 
-- Add streaming output for the analysis step (like the agentic chatbot project).
-- Improve DOCX/PDF export formatting (better section detection).
-- Add a history/session sidebar if needed.
-- Deploy to Streamlit Community Cloud.
+## 📝 License
+
+This project is available under the MIT License — update this section if you'd prefer a different license.
+
+## 🙏 Acknowledgments
+
+Built using [Groq](https://groq.com/) for fast LLM inference and [sentence-transformers](https://www.sbert.net/) for semantic matching.
