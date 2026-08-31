@@ -77,6 +77,12 @@ def build_regeneration_chain():
          "differently. Do this for every ALREADY-MATCHED keyword listed below - this is "
          "rewording truthful content, not fabrication, and it is the single most "
          "effective thing you can do here.\n\n"
+         "MISSING KEYWORDS RULE: the MISSING KEYWORDS list below uses the EXACT phrase "
+         "wording that the ATS scoring system checks for. If the candidate's ADDITIONAL "
+         "NOTES state they genuinely have one of these missing keywords/skills, add it "
+         "to the resume using that SAME exact wording (not a paraphrase or synonym of "
+         "it) so it is correctly recognized as a match. Do not reword or generalize a "
+         "confirmed missing keyword when adding it - use it verbatim.\n\n"
          "STRICT GROUNDING RULE: Do not invent, assume, or add any project, employer, "
          "job title, skill, tool, certification, metric, number, or achievement that is "
          "not explicitly present in the CURRENT RESUME or the ADDITIONAL NOTES below. "
@@ -96,7 +102,7 @@ def build_regeneration_chain():
          "invent anything beyond them): {additional_notes}\n\n"
          "ALREADY-MATCHED KEYWORDS (genuinely present - reword to the JD's exact "
          "phrasing wherever it appears in the resume): {semantic_matched_keywords}\n"
-         "MISSING KEYWORDS: {missing_keywords}\n"
+         "MISSING KEYWORDS (exact phrasing the ATS scorer checks for): {missing_keywords}\n"
          "MISSING SKILLS: {missing_skills}\n"
          "WEAK SECTIONS: {weak_sections}\n\n"
          "Return only the final rewritten resume text, plainly formatted with clear section headers."),
@@ -124,6 +130,15 @@ def build_paragraph_regeneration_chain():
          "(e.g. do not write 'Python (deep fluency)' or 'MySQL (relational database "
          "management system)'). Doing this for every skill makes the resume look like spam "
          "to a human recruiter. In a skills list, the exact JD term simply IS the entry.\n\n"
+         "MISSING KEYWORDS RULE: the MISSING KEYWORDS list below uses the EXACT phrase "
+         "wording that the ATS scoring system checks for. If the ADDITIONAL NOTES confirm "
+         "the candidate genuinely has one of these missing keywords/skills, add it into the "
+         "most relevant paragraph (e.g. a skills-list paragraph) using that SAME exact "
+         "wording - not a paraphrase or synonym - so it is correctly recognized as a match. "
+         "If no existing paragraph is a natural fit (e.g. there is no skills-list paragraph "
+         "at all), append it as a new short clause to the paragraph that most sensibly can "
+         "hold it rather than skipping it entirely, while still not creating a brand-new "
+         "paragraph.\n\n"
          "TITLE/HEADLINE RULE: if one of the paragraphs is the candidate's professional "
          "title/headline (the short line under their name, e.g. 'Python Developer'), change "
          "it to match the job description's title whenever the job's required skills "
@@ -148,7 +163,7 @@ def build_paragraph_regeneration_chain():
          "invent anything beyond them): {additional_notes}\n\n"
          "ALREADY-MATCHED KEYWORDS (genuinely present - reword to the JD's exact "
          "phrasing wherever it appears in a paragraph): {semantic_matched_keywords}\n"
-         "MISSING KEYWORDS: {missing_keywords}\n"
+         "MISSING KEYWORDS (exact phrasing the ATS scorer checks for): {missing_keywords}\n"
          "MISSING SKILLS: {missing_skills}\n"
          "WEAK SECTIONS: {weak_sections}\n\n"
          "Return the JSON array now."),
@@ -161,7 +176,7 @@ def get_suggestions(resume_text: str, job_description: str, analysis: dict) -> s
     return chain.invoke({
         "resume_text": resume_text,
         "job_description": job_description,
-        "missing_keywords": ", ".join(analysis.get("missing_keywords", [])),
+        "missing_keywords": ", ".join(analysis.get("semantic_missing_keywords") or analysis.get("missing_keywords", [])),
         "missing_skills": ", ".join(analysis.get("missing_skills", [])),
         "weak_sections": ", ".join(analysis.get("weak_sections", [])),
     })
@@ -174,7 +189,12 @@ def regenerate_resume(resume_text: str, job_description: str, analysis: dict, ad
         "job_description": job_description,
         "additional_notes": additional_notes.strip() if additional_notes else "(none provided)",
         "semantic_matched_keywords": ", ".join(analysis.get("semantic_matched_keywords") or analysis.get("matched_keywords", [])),
-        "missing_keywords": ", ".join(analysis.get("missing_keywords", [])),
+        # Use the SAME missing-keyword list the scorer checks against
+        # (semantic_missing_keywords), not the LLM's own separately-worded
+        # missing_keywords field - otherwise the model can add a genuine,
+        # correctly-worded skill that still doesn't match what the scorer
+        # is looking for, and the score won't move even though the fix was real.
+        "missing_keywords": ", ".join(analysis.get("semantic_missing_keywords") or analysis.get("missing_keywords", [])),
         "missing_skills": ", ".join(analysis.get("missing_skills", [])),
         "weak_sections": ", ".join(analysis.get("weak_sections", [])),
     })
@@ -210,7 +230,8 @@ def regenerate_resume_paragraphs(paragraphs: list, job_description: str, analysi
         "job_description": job_description,
         "additional_notes": additional_notes.strip() if additional_notes else "(none provided)",
         "semantic_matched_keywords": ", ".join(analysis.get("semantic_matched_keywords") or analysis.get("matched_keywords", [])),
-        "missing_keywords": ", ".join(analysis.get("missing_keywords", [])),
+        # Same fix as regenerate_resume(): align with what the scorer actually checks.
+        "missing_keywords": ", ".join(analysis.get("semantic_missing_keywords") or analysis.get("missing_keywords", [])),
         "missing_skills": ", ".join(analysis.get("missing_skills", [])),
         "weak_sections": ", ".join(analysis.get("weak_sections", [])),
     })
