@@ -374,9 +374,61 @@ CUSTOM_CSS = """
         background: var(--paper);
     }
 
+    /* ---------- Textarea (fixed: force light theme regardless of
+       system/browser dark mode, so typed text stays visible) ---------- */
     textarea {
         border-radius: 10px !important;
         font-family: var(--font-body) !important;
+        background: var(--paper-card) !important;
+        color: var(--ink) !important;
+        caret-color: var(--ink) !important;
+    }
+    textarea::placeholder {
+        color: var(--ink-soft) !important;
+        opacity: 1 !important;
+    }
+    [data-testid="stTextArea"] {
+        background: var(--paper-card) !important;
+    }
+
+    /* ---------- Mobile responsiveness ---------- */
+    html, body {
+        overflow-x: hidden;
+    }
+
+    @media (max-width: 640px) {
+        .navbar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.8rem;
+            padding: 1rem;
+        }
+        .navbar-links {
+            flex-wrap: wrap;
+            gap: 0.8rem 1.2rem;
+            font-size: 0.85rem;
+        }
+        .navbar-badge {
+            align-self: flex-start;
+        }
+        .hero h1 {
+            font-size: 1.8rem;
+        }
+        .hero {
+            padding: 1.6rem 0.5rem 1.4rem 0.5rem;
+        }
+        .steps {
+            padding: 0.9rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .step {
+            font-size: 0.78rem;
+        }
+        .verdict-wrap {
+            flex-direction: column;
+            text-align: center;
+        }
     }
 </style>
 """
