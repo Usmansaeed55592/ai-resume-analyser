@@ -179,16 +179,24 @@ if st.session_state.analysis:
 
     st.write("")
 
+    # NOTE: these two cards now use the VERIFIED semantic keyword lists
+    # (semantic_matched_keywords / semantic_missing_keywords) instead of
+    # the LLM's own freeform matched_keywords/missing_keywords fields.
+    # The freeform fields are not checked against the resume text at all -
+    # the LLM can list a keyword as "matched" purely because it sounds
+    # plausible for the role, without it actually being in the resume.
+    # The semantic lists are the ones the score is actually computed from,
+    # so what's shown here now always matches what's shown in the score.
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown('<div class="eyebrow">✓ Matched Keywords</div>', unsafe_allow_html=True)
-        st.markdown(render_pills(analysis["matched_keywords"], "good"), unsafe_allow_html=True)
+        st.markdown(render_pills(analysis["semantic_matched_keywords"], "good"), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with col_b:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown('<div class="eyebrow">⚠ Missing Keywords</div>', unsafe_allow_html=True)
-        st.markdown(render_pills(analysis["missing_keywords"], "bad"), unsafe_allow_html=True)
+        st.markdown(render_pills(analysis["semantic_missing_keywords"], "bad"), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -218,12 +226,20 @@ if st.session_state.analysis:
         st.write("Based on the gaps above, you can get quick suggestions or let AI rewrite your resume for this job.")
 
         st.markdown("**Anything real to add before we rewrite it?** (optional)")
-        additional_notes = st.text_area(
+        st.markdown(
+            '<p style="color: var(--ink-soft); font-size: 0.92rem; margin: 0 0 0.6rem 0; '
+            'background: transparent;">'
             "e.g. a skill, tool, certification, or project you actually have that isn't on the resume yet. "
-            "The AI will ONLY use what's already in your resume plus what you write here — it will not invent anything else.",
+            "The AI will ONLY use what's already in your resume plus what you write here — "
+            "it will not invent anything else.</p>",
+            unsafe_allow_html=True,
+        )
+        additional_notes = st.text_area(
+            "Additional notes",
             key="additional_notes_input",
             height=90,
             placeholder="Leave blank if there's nothing to add.",
+            label_visibility="collapsed",
         )
 
         opt_col1, opt_col2 = st.columns(2)
@@ -348,6 +364,8 @@ if st.session_state.analysis:
         st.write(f"**Final blended score:** {analysis.get('final_score')}")
         st.write("**Semantically matched keywords:**", analysis.get("semantic_matched_keywords", []))
         st.write("**Semantically missing keywords:**", analysis.get("semantic_missing_keywords", []))
+        st.write("**LLM's own (unverified) matched_keywords field:**", analysis.get("matched_keywords", []))
+        st.write("**LLM's own (unverified) missing_keywords field:**", analysis.get("missing_keywords", []))
         st.json(analysis)
 
 # ---------- Footer ----------

@@ -2,10 +2,16 @@
 Core analysis chain: compares resume text against a job description
 and produces a structured ATS-style report using Groq via LangChain.
 
-Keyword/skill matching uses semantic (embedding-based) similarity instead
-of literal string matching, so paraphrased/synonym skills (e.g. "K8s" vs
-"Kubernetes", "REST APIs" vs "API development") are correctly recognized
-as matches instead of being wrongly flagged as missing.
+Keyword/skill matching uses a HYBRID approach:
+1. Literal substring match first (fast, exact, and correctly catches short
+   acronyms like "OOP" or "CI" that embedding models handle poorly).
+2. Falls back to embedding-based semantic similarity for paraphrases/
+   synonyms (e.g. "K8s" vs "Kubernetes", "REST APIs" vs "API development")
+   that literal matching would miss.
+A stricter threshold is used for single-word phrases specifically, since
+short phrases are noisier for embedding similarity and were previously
+producing false-positive matches (e.g. "Pakistan", "Description" wrongly
+matching resume text) as well as false negatives.
 """
 
 import re
@@ -74,6 +80,45 @@ def build_analysis_chain():
     return prompt | structured_llm
 
 
+# Generic job-posting boilerplate: section headers, leading verbs on bullet
+# lines, and other structural/filler words. These show up capitalized only
+# because they START a line or sentence in the JD - not because they're
+# real skills/tools - so they must never be treated as keywords.
+FILLER_WORDS = {
+    "the", "and", "with", "for", "you", "your", "our", "will", "are", "this",
+    "that", "have", "has", "job", "role", "team", "work", "years", "experience",
+    "strong", "good", "ability", "abilities", "able", "skills", "skill",
+    "knowledge", "using", "requirements", "requirement", "required", "require",
+    "nice", "plus", "capable", "comfortable", "solid", "track", "record", "deep",
+    "fluency", "familiarity", "exposure", "understanding", "understand",
+    "grounding", "proven", "demonstrated", "hands-on", "working", "genuine",
+    "genuinely", "title", "such", "as", "via", "of", "in", "on", "to", "a", "an",
+    "or", "is", "be", "including", "etc", "into", "through", "between",
+    "distinguishing", "structuring", "reasoning", "shipping", "persisting",
+    "exposing", "constructing", "construct", "implementing", "about", "onto",
+    "within", "across", "toward", "towards", "along",
+    # section headers / structural words
+    "responsibilities", "responsibility", "description", "overview", "summary",
+    "location", "position", "level", "about", "qualifications", "qualification",
+    # common bullet-leading verbs (capitalized only because they start a line)
+    "develop", "set", "maintain", "collaborate", "apply", "solve", "write",
+    "build", "create", "manage", "ensure", "perform", "participate", "join",
+    "design", "deploy", "implement", "use", "support", "help", "assist",
+    "contribute", "own", "drive", "lead", "define", "establish", "improve",
+    "optimize", "monitor", "troubleshoot", "debug", "test", "review",
+    "document", "communicate", "coordinate", "core", "based",
+}
+
+
+def _is_section_header(line: str) -> bool:
+    """A short line ending in ':' (e.g. 'Required Skills:', 'Responsibilities:')
+    is a section header, not a bullet with real content - skip it entirely."""
+    stripped = line.strip(" -*\u2022\t")
+    if not stripped:
+        return False
+    return stripped.endswith(":") and len(stripped.split()) <= 4
+
+
 def _extract_jd_key_phrases(job_description: str, max_phrases: int = 40) -> List[str]:
     """
     Pull candidate keyword/skill phrases out of the JD. Two sources:
@@ -85,39 +130,25 @@ def _extract_jd_key_phrases(job_description: str, max_phrases: int = 40) -> List
     digit/symbol, e.g. "Python", "MySQL", "CI/CD", "C++") - plain lowercase
     English words are excluded here so descriptive prose ("comfortable",
     "solid", "asynchronous") doesn't get treated as a skill.
+    Section-header lines are skipped entirely so header words like
+    "Required Skills:" or "Responsibilities:" never become keywords.
     Doesn't need to be perfect - the similarity scoring below (not exact
     string match) does the real work.
     """
-    # Generic words that show up in JD boilerplate but aren't skills -
-    # trimmed from the edges of comma-split phrases and excluded outright
-    # from the standalone-token pass.
-    filler_words = {
-        "the", "and", "with", "for", "you", "your", "our", "will", "are", "this",
-        "that", "have", "has", "job", "role", "team", "work", "years", "experience",
-        "strong", "good", "ability", "abilities", "able", "skills", "skill",
-        "knowledge", "using", "requirements", "requirement", "nice", "plus",
-        "capable", "comfortable", "solid", "track", "record", "deep", "fluency",
-        "familiarity", "exposure", "understanding", "grounding", "proven",
-        "demonstrated", "hands-on", "working", "genuine", "genuinely", "title",
-        "such", "as", "via", "of", "in", "on", "to", "a", "an", "or", "is", "be",
-        "including", "etc", "into", "through", "between", "distinguishing",
-        "structuring", "reasoning", "shipping", "persisting", "exposing",
-        "constructing", "construct", "implementing", "reasoning", "about",
-        "onto", "within", "across", "toward", "towards", "along",
-    }
-
     phrases = set()
 
     for line in job_description.splitlines():
+        if _is_section_header(line):
+            continue
         line = line.strip(" -*\u2022\t")
         if not line:
             continue
         for part in re.split(r"[,/]| and ", line):
-            words = part.strip(" .").split()
+            words = part.strip(" .()[]").split()
             # trim filler words off both ends of the fragment
-            while words and words[0].lower().strip(",.():;") in filler_words:
+            while words and words[0].lower().strip(",.():;[]") in FILLER_WORDS:
                 words.pop(0)
-            while words and words[-1].lower().strip(",.():;") in filler_words:
+            while words and words[-1].lower().strip(",.():;[]") in FILLER_WORDS:
                 words.pop()
             if not (2 <= len(words) <= 6):
                 continue
@@ -126,24 +157,42 @@ def _extract_jd_key_phrases(job_description: str, max_phrases: int = 40) -> List
             # isn't itself filler) so we don't keep phrases that are entirely
             # generic English
             if not any(
-                (w[0].isupper() or any(ch.isdigit() for ch in w) or w.lower() not in filler_words)
-                and len(w.strip(",.():;")) > 3
+                (w[0].isupper() or any(ch.isdigit() for ch in w) or w.lower() not in FILLER_WORDS)
+                and len(w.strip(",.():;[]")) > 3
                 for w in words
             ):
                 continue
-            phrases.add(" ".join(words))
+            # strip stray unmatched brackets/parens left at the edges from
+            # a comma-split cutting a JD phrase like "(AWS, Azure)" in half
+            cleaned = " ".join(words).strip("()[] .")
+            if cleaned:
+                phrases.add(cleaned)
 
     # Standalone tokens: only proper-noun-like words or tokens containing a
     # digit/symbol (Python, MySQL, FastAPI, CI, CD, C++, Node.js) - excludes
-    # plain lowercase English descriptive words entirely.
-    tokens = re.findall(r"[A-Za-z][A-Za-z0-9+#.]{2,}", job_description)
-    for raw_t in tokens:
-        t = raw_t.strip(".")  # trailing "." (end of sentence) isn't a real symbol
-        if not t or t.lower() in filler_words:
+    # plain lowercase English descriptive words entirely, AND excludes any
+    # word that's simply the first word of its line (which is capitalized
+    # only due to sentence position, not because it's a real proper noun).
+    for line in job_description.splitlines():
+        if _is_section_header(line):
             continue
-        looks_technical = t[0].isupper() or any(ch.isdigit() or ch in "+#." for ch in t)
-        if looks_technical and len(t) > 2:
-            phrases.add(t)
+        stripped_line = line.strip(" -*\u2022\t")
+        if not stripped_line:
+            continue
+        line_tokens = re.findall(r"[A-Za-z][A-Za-z0-9+#.]{2,}", stripped_line)
+        for i, raw_t in enumerate(line_tokens):
+            t = raw_t.strip(".()[]")  # trailing punctuation isn't a real symbol
+            if not t or t.lower() in FILLER_WORDS:
+                continue
+            if i == 0:
+                # first token on the line - skip unless it's clearly technical
+                # (contains a digit/symbol; plain capitalized words this
+                # early are almost always sentence-starting verbs/headers)
+                if not any(ch.isdigit() or ch in "+#." for ch in t):
+                    continue
+            looks_technical = t[0].isupper() or any(ch.isdigit() or ch in "+#." for ch in t)
+            if looks_technical and len(t) > 2:
+                phrases.add(t)
 
     # Drop single-word phrases that are just a piece of a longer phrase we
     # already extracted (e.g. "Web"/"Application" when "Python Web
@@ -165,37 +214,63 @@ def _extract_jd_key_phrases(job_description: str, max_phrases: int = 40) -> List
 
     return list(deduped)[:max_phrases]
 
+
+def _literal_match(phrase: str, resume_text_lower: str) -> bool:
+    """Exact (case-insensitive, word-boundary) substring match. Checked
+    before falling back to embeddings - this is what a real ATS keyword
+    scanner does, and it correctly catches short acronyms (OOP, CI, CD)
+    that sentence-embedding models handle unreliably at this length."""
+    pattern = r"\b" + re.escape(phrase.lower()) + r"\b"
+    return re.search(pattern, resume_text_lower) is not None
+
+
 def semantic_keyword_match(resume_text: str, job_description: str, threshold: float = None) -> dict:
     """
-    Embedding-based semantic matching: extracts candidate keyword/skill
-    phrases from the JD, embeds them alongside resume sentences, and marks
-    a phrase as matched if ANY resume sentence is semantically close to it
-    (cosine similarity above threshold) - catching synonyms/paraphrases
-    that literal string matching misses.
+    Hybrid matching: a JD phrase counts as matched if it's found as a
+    literal substring in the resume (handles exact terms and short
+    acronyms reliably), OR if any resume sentence is semantically close to
+    it via embeddings (catches synonyms/paraphrases that literal matching
+    misses). Single-word phrases use a stricter embedding threshold than
+    multi-word phrases, since short phrases produce noisier similarity
+    scores and were previously causing false-positive matches.
     """
     threshold = threshold if threshold is not None else getattr(config, "SEMANTIC_MATCH_THRESHOLD", 0.55)
+    single_word_threshold = threshold + 0.12
 
     phrases = _extract_jd_key_phrases(job_description)
     if not phrases:
         return {"matched": [], "missing": [], "score": 0.0}
 
+    resume_text_lower = resume_text.lower()
     resume_chunks = [c.strip() for c in re.split(r"[\n.]", resume_text) if len(c.strip()) > 3]
     if not resume_chunks:
         return {"matched": [], "missing": phrases, "score": 0.0}
 
-    model = get_embedder()
-    phrase_embeddings = model.encode(phrases, convert_to_tensor=True)
-    chunk_embeddings = model.encode(resume_chunks, convert_to_tensor=True)
-
-    similarity_matrix = util.cos_sim(phrase_embeddings, chunk_embeddings)
-
-    matched, missing = [], []
-    for i, phrase in enumerate(phrases):
-        best_score = float(similarity_matrix[i].max())
-        if best_score >= threshold:
+    # First pass: literal matches, resolved without needing the embedder.
+    matched, still_unresolved = [], []
+    for phrase in phrases:
+        if _literal_match(phrase, resume_text_lower):
             matched.append(phrase)
         else:
-            missing.append(phrase)
+            still_unresolved.append(phrase)
+
+    # Second pass: embedding similarity for whatever literal matching missed.
+    if still_unresolved:
+        model = get_embedder()
+        phrase_embeddings = model.encode(still_unresolved, convert_to_tensor=True)
+        chunk_embeddings = model.encode(resume_chunks, convert_to_tensor=True)
+        similarity_matrix = util.cos_sim(phrase_embeddings, chunk_embeddings)
+
+        missing = []
+        for i, phrase in enumerate(still_unresolved):
+            best_score = float(similarity_matrix[i].max())
+            phrase_threshold = single_word_threshold if len(phrase.split()) == 1 else threshold
+            if best_score >= phrase_threshold:
+                matched.append(phrase)
+            else:
+                missing.append(phrase)
+    else:
+        missing = []
 
     score = round((len(matched) / len(phrases)) * 100, 2) if phrases else 0.0
     return {"matched": matched, "missing": missing, "score": score}

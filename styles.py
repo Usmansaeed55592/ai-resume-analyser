@@ -391,6 +391,42 @@ CUSTOM_CSS = """
         background: var(--paper-card) !important;
     }
 
+    /* ---------- Widget labels/captions (fixed: Streamlit's default white
+       label background clashed with our paper/beige theme) ---------- */
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] *,
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] *,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stMarkdownContainer"] p,
+    .stCaption,
+    label,
+    label p,
+    label span {
+        background: var(--paper) !important;
+        background-color: var(--paper) !important;
+        color: var(--ink-soft) !important;
+    }
+
+    /* ---------- Universal white-background catch-all ----------
+       Streamlit often sets backgrounds as inline styles rather than via
+       classes, so no matter which internal element it lands on, this
+       hunts down anything inline-styled white/near-white and forces it
+       to the app's cream background - this is what actually fixes stray
+       white boxes wherever Streamlit happens to put them, without
+       needing the exact selector. */
+    .stApp [style*="background-color: rgb(255, 255, 255)"],
+    .stApp [style*="background-color:rgb(255,255,255)"],
+    .stApp [style*="background-color: #ffffff"],
+    .stApp [style*="background-color: #fff"],
+    .stApp [style*="background-color: white"],
+    .stApp [style*="background: rgb(255, 255, 255)"],
+    .stApp [style*="background: #ffffff"],
+    .stApp [style*="background: white"] {
+        background: var(--paper) !important;
+        background-color: var(--paper) !important;
+    }
+
     /* ---------- Mobile responsiveness ---------- */
     html, body {
         overflow-x: hidden;
