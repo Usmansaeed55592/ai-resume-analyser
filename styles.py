@@ -393,16 +393,13 @@ CUSTOM_CSS = """
 
     /* ---------- Widget labels/captions (fixed: Streamlit's default white
        label background clashed with our paper/beige theme) ---------- */
-    [data-testid="stWidgetLabel"],
-    [data-testid="stWidgetLabel"] *,
-    [data-testid="stCaptionContainer"],
-    [data-testid="stCaptionContainer"] *,
-    [data-testid="stMarkdownContainer"],
-    [data-testid="stMarkdownContainer"] p,
-    .stCaption,
-    label,
-    label p,
-    label span {
+    [data-testid="stWidgetLabel"]:not(button *),
+    [data-testid="stWidgetLabel"] *:not(button *),
+    [data-testid="stCaptionContainer"]:not(button *),
+    [data-testid="stCaptionContainer"] *:not(button *),
+    [data-testid="stMarkdownContainer"]:not(button *),
+    [data-testid="stMarkdownContainer"] p:not(button *),
+    .stCaption:not(button *) {
         background: var(--paper) !important;
         background-color: var(--paper) !important;
         color: var(--ink-soft) !important;
@@ -412,19 +409,37 @@ CUSTOM_CSS = """
        Streamlit often sets backgrounds as inline styles rather than via
        classes, so no matter which internal element it lands on, this
        hunts down anything inline-styled white/near-white and forces it
-       to the app's cream background - this is what actually fixes stray
-       white boxes wherever Streamlit happens to put them, without
-       needing the exact selector. */
-    .stApp [style*="background-color: rgb(255, 255, 255)"],
-    .stApp [style*="background-color:rgb(255,255,255)"],
-    .stApp [style*="background-color: #ffffff"],
-    .stApp [style*="background-color: #fff"],
-    .stApp [style*="background-color: white"],
-    .stApp [style*="background: rgb(255, 255, 255)"],
-    .stApp [style*="background: #ffffff"],
-    .stApp [style*="background: white"] {
+       to the app's cream background. Explicitly excludes buttons and the
+       file-uploader control, since Streamlit implements those using an
+       internal <label> too, and this rule must not repaint them. */
+    .stApp [style*="background-color: rgb(255, 255, 255)"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background-color:rgb(255,255,255)"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background-color: #ffffff"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background-color: #fff"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background-color: white"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background: rgb(255, 255, 255)"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background: #ffffff"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *),
+    .stApp [style*="background: white"]:not(button):not(button *):not([data-testid*="Button"]):not([data-testid*="Button"] *):not([data-testid="stFileUploaderDropzone"]):not([data-testid="stFileUploaderDropzone"] *) {
         background: var(--paper) !important;
         background-color: var(--paper) !important;
+    }
+
+    /* Re-affirm button/upload styling with !important so it always wins
+       regardless of the catch-all above or any Streamlit default. */
+    div.stButton > button,
+    div.stButton > button * {
+        background: var(--signal) !important;
+        color: var(--paper-card) !important;
+    }
+    div.stDownloadButton > button,
+    div.stDownloadButton > button * {
+        background: var(--green) !important;
+        color: var(--paper-card) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button,
+    [data-testid="stFileUploaderDropzone"] button * {
+        background: var(--ink) !important;
+        color: var(--paper-card) !important;
     }
 
     /* ---------- Mobile responsiveness ---------- */
